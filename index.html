@@ -972,9 +972,10 @@
     let timerInterval;
     let seconds = 0;
     let minutes = 0;
+    let recording = false; // گۆڕاوێک بۆ زانینی دۆخی تۆمارکردن
     
     // API key stored in the backend
-    const GEMINI_API_KEY = "AIzaSyD4b3y2cvssePAYACWxvAgWrAaNZzYITZw";
+    const GEMINI_API_KEY = "AIzaSyDwutX11TvHE7_V0DZl92VETg-AleuXozQ";
     
     const recordButton = document.getElementById('recordButton');
     const recordingIndicator = document.getElementById('recordingIndicator');
@@ -984,6 +985,7 @@
     const clearButton = document.getElementById('clearButton');
     const result = document.getElementById('result');
     const status = document.getElementById('status');
+    const audioPlayer = document.getElementById('audioPlayer');
     
     // Add pulse animation when page loads
     setTimeout(() => {
@@ -996,18 +998,41 @@
     }, 1000);
     
     if (recordButton) {
-        // خاڵی گرنگ: تەنها mousedown/touchstart ڕووداو بۆ داواکردنی مۆڵەت بەکاربێنە
-        recordButton.addEventListener('mousedown', handleRecordButtonPress);
-        recordButton.addEventListener('touchstart', handleRecordButtonPress);
+        // Separate event handling for desktop and mobile
+        // For desktop
+        recordButton.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            if (!recording) {
+                handleRecordButtonPress();
+            }
+        });
         
-        // بەردانی دوگمەکە
-        recordButton.addEventListener('mouseup', stopRecording);
-        recordButton.addEventListener('touchend', stopRecording);
+        recordButton.addEventListener('mouseup', function(e) {
+            e.preventDefault();
+            if (recording) {
+                stopRecording();
+            }
+        });
         
         // ئەگەر mouse دەرچوو، تۆمارکردن ڕابگرە
         recordButton.addEventListener('mouseleave', function(e) {
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                stopRecording(e);
+            if (recording) {
+                stopRecording();
+            }
+        });
+        
+        // For mobile
+        recordButton.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            if (!recording) {
+                handleRecordButtonPress();
+            }
+        });
+        
+        recordButton.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            if (recording) {
+                stopRecording();
             }
         });
     }
@@ -1053,9 +1078,7 @@
     }
     
     // ئەم فەنکشنە بۆ دەست پێکردنی پرۆسەکەیە بە ئاسایی
-    async function handleRecordButtonPress(e) {
-        e.preventDefault();
-
+    async function handleRecordButtonPress() {
         if (status) {
             status.textContent = 'داواکردنی مۆڵەت بۆ مایکرۆفۆن...';
             status.classList.remove('recording', 'error', 'success', 'processing');
@@ -1072,7 +1095,7 @@
             });
             
             // دوای وەرگرتنی مۆڵەت، دەست بکە بە تۆمارکردن
-            startRecording(e);
+            startRecording();
             
         } catch (error) {
             console.error('Error accessing microphone:', error);
@@ -1092,102 +1115,44 @@
     }
     
     // ئەم فەنکشنە تەنها دوای وەرگرتنی مۆڵەت بانگ دەکرێت
-    function startRecording(e) {
+    function startRecording() {
+        recording = true; // دەستپێکی تۆمارکردن
         audioChunks = [];
         
         // ئێستا کە stream مان هەیە، دەتوانین mediaRecorder دروست بکەین
-        mediaRecorder = new MediaRecorder(stream);
-        
-        mediaRecorder.ondataavailable = event => {
-            audioChunks.push(event.data);
-        };
-        
-        mediaRecorder.onstop = processRecording;
-        
-        mediaRecorder.start();
-        recordButton.classList.add('recording');
-        
-        // گۆڕینی نیشانەی مایکرۆفۆن
-        recordButton.textContent = '';
-        
-        // دروستکردنی میک ئایکۆن
-        const newMicIconDiv = document.createElement('div');
-        newMicIconDiv.className = 'mic-icon recording';
-        
-        const micHead = document.createElement('div');
-        micHead.className = 'mic-head';
-        
-        const micBody = document.createElement('div');
-        micBody.className = 'mic-body';
-        
-        const micStand = document.createElement('div');
-        micStand.className = 'mic-stand';
-        
-        const micBase = document.createElement('div');
-        micBase.className = 'mic-base';
-        
-        const recordingWaves = document.createElement('div');
-        recordingWaves.className = 'recording-waves';
-        
-        for (let i = 0; i < 5; i++) {
-            const waveBar = document.createElement('div');
-            waveBar.className = 'wave-bar';
-            recordingWaves.appendChild(waveBar);
-        }
-        
-        newMicIconDiv.appendChild(micHead);
-        newMicIconDiv.appendChild(micBody);
-        newMicIconDiv.appendChild(micStand);
-        newMicIconDiv.appendChild(micBase);
-        newMicIconDiv.appendChild(recordingWaves);
-        
-        recordButton.appendChild(newMicIconDiv);
-        
-        if (status) {
-            status.textContent = 'تۆمارکردن...';
-            status.classList.add('recording');
-        }
-        
-        // نیشاندانی ئیندیکەیتەر
-        if (recordingIndicator) {
-            recordingIndicator.classList.add('active');
-        }
-        
-        if (waveContainer) {
-            waveContainer.classList.add('recording');
-        }
-        
-        // دەستکردن بە کاتژمێر
-        seconds = 0;
-        minutes = 0;
-        if (timer) {
-            timer.textContent = "00:00";
-            timer.style.display = 'block';
-            timerInterval = setInterval(updateTimer, 1000);
-        }
-    }
-    
-    function stopRecording(e) {
-        if (e) e.preventDefault();
-        
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
+        try {
+            mediaRecorder = new MediaRecorder(stream);
             
-            // کوژاندنەوەی تراکەکانی دەنگ
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
             
-            // ڕاگرتنی کاتژمێر
-            clearInterval(timerInterval);
+            mediaRecorder.onstop = processRecording;
+            
+            // خاڵی گرنگ: پێش دەستپێکردن، دڵنیابە کە هەڵە ڕوونادات
+            mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+                if (status) {
+                    status.textContent = 'هەڵە لە تۆمارکردن: ' + event.error;
+                    status.classList.add('error');
+                }
+                stopRecording();
+            };
+            
+            // دەستپێکردنی تۆمارکردن بە ئەپدەیتێکی 100ms
+            mediaRecorder.start(100);
             
             if (recordButton) {
-                recordButton.classList.remove('recording');
+                recordButton.classList.add('recording');
                 
-                // گەڕاندنەوەی دەقی دوگمەکە
-                recordButton.innerHTML = '';
-                const newMicIcon = document.createElement('div');
-                newMicIcon.className = 'mic-icon';
+                // گۆڕینی نیشانەی مایکرۆفۆن
+                recordButton.textContent = '';
+                
+                // دروستکردنی میک ئایکۆن
+                const newMicIconDiv = document.createElement('div');
+                newMicIconDiv.className = 'mic-icon recording';
                 
                 const micHead = document.createElement('div');
                 micHead.className = 'mic-head';
@@ -1201,51 +1166,192 @@
                 const micBase = document.createElement('div');
                 micBase.className = 'mic-base';
                 
-                newMicIcon.appendChild(micHead);
-                newMicIcon.appendChild(micBody);
-                newMicIcon.appendChild(micStand);
-                newMicIcon.appendChild(micBase);
+                const recordingWaves = document.createElement('div');
+                recordingWaves.className = 'recording-waves';
                 
-                recordButton.appendChild(newMicIcon);
-                recordButton.appendChild(document.createTextNode('پەنجە دابنێ بۆ تۆمارکردن'));
+                for (let i = 0; i < 5; i++) {
+                    const waveBar = document.createElement('div');
+                    waveBar.className = 'wave-bar';
+                    recordingWaves.appendChild(waveBar);
+                }
+                
+                newMicIconDiv.appendChild(micHead);
+                newMicIconDiv.appendChild(micBody);
+                newMicIconDiv.appendChild(micStand);
+                newMicIconDiv.appendChild(micBase);
+                newMicIconDiv.appendChild(recordingWaves);
+                
+                recordButton.appendChild(newMicIconDiv);
             }
             
             if (status) {
-                status.textContent = 'تۆمارکردن وەستا، چاوەڕوانی شیکردنەوەی دەنگ...';
-                status.classList.remove('recording');
-                status.classList.add('processing');
+                status.textContent = 'تۆمارکردن...';
+                status.classList.add('recording');
             }
             
-            // لابردنی نیشانەکان
+            // نیشاندانی ئیندیکەیتەر
             if (recordingIndicator) {
-                recordingIndicator.classList.remove('active');
+                recordingIndicator.classList.add('active');
             }
             
             if (waveContainer) {
-                waveContainer.classList.remove('recording');
+                waveContainer.classList.add('recording');
+            }
+            
+            // دەستکردن بە کاتژمێر
+            seconds = 0;
+            minutes = 0;
+            if (timer) {
+                timer.textContent = "00:00";
+                timer.style.display = 'block';
+                timerInterval = setInterval(updateTimer, 1000);
+            }
+        } catch (error) {
+            console.error('Error starting MediaRecorder:', error);
+            if (status) {
+                status.textContent = 'هەڵە لە دەستپێکردنی تۆمارکردن: ' + error.message;
+                status.classList.add('error');
+            }
+            recording = false;
+        }
+    }
+    
+    function stopRecording() {
+        if (!recording) return; // ئەگەر پێشتر تۆمارکردن کۆتایی هاتبێت، هیچ مەکە
+        
+        recording = false; // کۆتایی هێنان بە تۆمارکردن
+        
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            try {
+                mediaRecorder.stop();
+                
+                // کوژاندنەوەی تراکەکانی دەنگ
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // ڕاگرتنی کاتژمێر
+                clearInterval(timerInterval);
+                
+                if (recordButton) {
+                    recordButton.classList.remove('recording');
+                    
+                    // گەڕاندنەوەی دەقی دوگمەکە
+                    recordButton.innerHTML = '';
+                    const newMicIcon = document.createElement('div');
+                    newMicIcon.className = 'mic-icon';
+                    
+                    const micHead = document.createElement('div');
+                    micHead.className = 'mic-head';
+                    
+                    const micBody = document.createElement('div');
+                    micBody.className = 'mic-body';
+                    
+                    const micStand = document.createElement('div');
+                    micStand.className = 'mic-stand';
+                    
+                    const micBase = document.createElement('div');
+                    micBase.className = 'mic-base';
+                    
+                    newMicIcon.appendChild(micHead);
+                    newMicIcon.appendChild(micBody);
+                    newMicIcon.appendChild(micStand);
+                    newMicIcon.appendChild(micBase);
+                    
+                    recordButton.appendChild(newMicIcon);
+                    recordButton.appendChild(document.createTextNode('پەنجە دابنێ بۆ تۆمارکردن'));
+                }
+                
+                if (status) {
+                    status.textContent = 'تۆمارکردن وەستا، چاوەڕوانی شیکردنەوەی دەنگ...';
+                    status.classList.remove('recording');
+                    status.classList.add('processing');
+                }
+                
+                // لابردنی نیشانەکان
+                if (recordingIndicator) {
+                    recordingIndicator.classList.remove('active');
+                }
+                
+                if (waveContainer) {
+                    waveContainer.classList.remove('recording');
+                }
+            } catch (error) {
+                console.error('Error stopping recording:', error);
+                if (status) {
+                    status.textContent = 'هەڵە لە کۆتایی هێنان بە تۆمارکردن: ' + error.message;
+                    status.classList.add('error');
+                }
             }
         }
     }
     
     function processRecording() {
-        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        audioUrl = URL.createObjectURL(audioBlob);
-        const audioPlayer = document.getElementById('audioPlayer');
-        if (audioPlayer) {
-            audioPlayer.src = audioUrl;
-            audioPlayer.style.display = 'block';
+        // دڵنیابوون لەوەی کە ئۆدیۆ چانکەکان هەن
+        if (audioChunks.length === 0) {
+            if (status) {
+                status.textContent = 'هەڵە: هیچ دەنگێک تۆمار نەکرا.';
+                status.classList.remove('processing');
+                status.classList.add('error');
+            }
+            return;
         }
         
-        // گۆڕین بۆ base64 و ناردن بۆ Gemini API
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = function() {
-            const base64data = reader.result.split(',')[1];
-            transcribeAudio(base64data);
-        };
+        try {
+            audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            audioUrl = URL.createObjectURL(audioBlob);
+            
+            if (audioPlayer) {
+                audioPlayer.src = audioUrl;
+                audioPlayer.style.display = 'block';
+            }
+            
+            // گۆڕین بۆ base64 و ناردن بۆ Gemini API
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                try {
+                    const base64data = reader.result.split(',')[1];
+                    transcribeAudio(base64data);
+                } catch (error) {
+                    console.error('Error processing audio to base64:', error);
+                    if (status) {
+                        status.textContent = 'هەڵە لە ئامادەکردنی دەنگ: ' + error.message;
+                        status.classList.remove('processing');
+                        status.classList.add('error');
+                    }
+                }
+            };
+            
+            reader.onerror = function(error) {
+                console.error('FileReader error:', error);
+                if (status) {
+                    status.textContent = 'هەڵە لە خوێندنەوەی فایل: ' + error.message;
+                    status.classList.remove('processing');
+                    status.classList.add('error');
+                }
+            };
+            
+            reader.readAsDataURL(audioBlob);
+        } catch (error) {
+            console.error('Error creating audio blob:', error);
+            if (status) {
+                status.textContent = 'هەڵە لە ئامادەکردنی دەنگی تۆمارکراو: ' + error.message;
+                status.classList.remove('processing');
+                status.classList.add('error');
+            }
+        }
     }
     
     async function transcribeAudio(audioBase64) {
+        if (!audioBase64) {
+            if (status) {
+                status.textContent = 'هەڵە: فایلی دەنگ بەتاڵە';
+                status.classList.remove('processing');
+                status.classList.add('error');
+            }
+            return;
+        }
+        
         if (status) {
             status.textContent = 'شیکردنەوەی دەنگ...';
             status.classList.remove('recording');
@@ -1275,7 +1381,8 @@
             });
             
             if (!response.ok) {
-                throw new Error(`API response: ${response.status} ${response.statusText}`);
+                const errorData = await response.text();
+                throw new Error(`API response: ${response.status} ${response.statusText}. ${errorData}`);
             }
             
             const data = await response.json();
@@ -1404,6 +1511,9 @@
                         }
                     }
                 };
+            })
+            .catch(error => {
+                console.error('Error checking permission:', error);
             });
     }
     
